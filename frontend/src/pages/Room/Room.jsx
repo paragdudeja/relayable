@@ -8,9 +8,14 @@ import { getRoom } from '../../http';
 const Room = () => {
   const { id: roomId } = useParams();
   const user = useSelector((state) => state.auth.user);
-  const { clients, provideRef } = useWebRTC(roomId, user);
+  const { clients, provideRef, handleMute } = useWebRTC(roomId, user);
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
+  const [isMute, setIsMute] = useState(true);
+
+  useEffect(() => {
+    handleMute(isMute, user.id);
+  }, [isMute]);
 
   const handleManualLeave = () => {
     navigate('/rooms');
@@ -24,6 +29,11 @@ const Room = () => {
 
     fetchRoom();
   }, [roomId])
+
+  const handleMuteClick = (clientId) => {
+    if(clientId !== user.id) return;
+    setIsMute((isMute) => !isMute);
+  }
 
   return (
     <div>
@@ -63,11 +73,18 @@ const Room = () => {
                       alt="avatar"
                       className={styles.userAvatar}
                     />
-                    <button className={styles.micBtn}>
-                      <img
-                        src="/images/mic-mute.png"
-                        alt="mic-mute-icon"
-                      />
+                    <button onClick={() => handleMuteClick(client.id)} className={styles.micBtn}>
+                      {
+                        client.muted ? (
+                        <img
+                          src="/images/mic-mute.png"
+                          alt="mic-mute-icon"
+                        /> ) : (
+                        <img
+                          src="/images/mic.png"
+                          alt="mic-icon"
+                        /> )
+                      }
                     </button>
                   </div>
                   <h4>{client.name}</h4>

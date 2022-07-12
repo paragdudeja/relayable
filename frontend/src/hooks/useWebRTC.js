@@ -23,6 +23,7 @@ export const useWebRTC = (roomId, user) => {
   const connections = useRef({});
   const localMediaStream = useRef(null);
   const socket = useRef(null);
+  const clientsRef = useRef([]);
 
   const provideRef = (instance, userId) => {
     audioElements.current[userId] = instance;
@@ -51,7 +52,7 @@ export const useWebRTC = (roomId, user) => {
     };
 
     startCapture().then(() => {
-      addNewClient(user, () => {
+      addNewClient({...user, muted: true}, () => {
         const localElement = audioElements.current[user.id];
         if (localElement) {
           localElement.volume = 0;
@@ -94,7 +95,7 @@ export const useWebRTC = (roomId, user) => {
       connections.current[peerId].ontrack = ({
         streams: [remoteStream]
       }) => {
-        addNewClient(remoteUser, () => {
+        addNewClient({...remoteUser, muted: true}, () => {
           if(audioElements.current[remoteUser.id]) {
             audioElements.current[remoteUser.id].srcObject = remoteStream
           } else {
@@ -197,8 +198,58 @@ export const useWebRTC = (roomId, user) => {
     return () => {
       socket.current.off(ACTIONS.REMOVE_PEER);
     }
-  }, [])
+  }, []);
 
-  return { clients, provideRef };
+  const handleMute = (isMute, userId) => {
+    let settled = false;
+
+    let interval = setInterval(() => {
+      if(localMediaStream.current) {
+        localMediaStream.current.getTracks()[0].enabled = !isMute;
+        if(isMute) {
+          socket.current.emit(ACTIONS.MUTE, {
+            roomId,
+            userId,
+          })
+        } else {
+          socket.current.emit(ACTIONS.UNMUTE, {
+            roomId,
+            userId,
+          })
+        }
+        settled = true;
+      }
+      if(settled) {
+        clearInterval(interval);
+      }
+    }, 200);
+  }
+
+  useEffect(() => {
+    clientsRef.current = clients;
+  }, [clients]);
+
+  // listen for mute unmute
+  useEffect(() => {
+    socket.current.on(ACTIONS.MUTE, ({ peerId, userId }) => {
+      setMute(true, userId);
+    });
+
+    socket.current.on(ACTIONS.UNMUTE, ({ peerId, userId }) => {
+      setMute(false, userId);
+    });
+
+    const setMute = (mute, userId) => {
+      const clientIndex = clientsRef.current.map(client => client.id).indexOf(userId);
+
+      const connectedClients = JSON.parse(JSON.stringify(clientsRef.current));
+      if(clientIndex > -1) {
+        connectedClients[clientIndex].muted = mute;
+        setClients(connectedClients);
+      }
+    }
+  }, []);
+
+  return { clients, provideRef, handleMute };
 
 }
